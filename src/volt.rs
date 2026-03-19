@@ -36,7 +36,7 @@ fn energy_drain(time: Res<Time>, mut query: Query<&mut Energy, With<Volt>>) {
 pub fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
     commands.spawn((
-        Volt { speed: 1.0 },
+        Volt { speed: 100.0 },
         Energy {
             current: 100.0,
             max: 150.0,
@@ -59,8 +59,7 @@ pub fn setup(mut commands: Commands) {
         Transform::from_xyz(35.0, -35.0, 0.0),
     ));
 }
-fn movement(
-    mut query: Query<(&mut Transform, &Volt), With<Volt>>,
+fn movement(time: Res<Time>,    mut query: Query<(&mut Transform, &Volt), With<Volt>>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
     let Ok((mut transform, volt)) = query.single_mut() else {
@@ -68,16 +67,16 @@ fn movement(
     };
 
     if keys.pressed(KeyCode::KeyD) {
-        transform.translation.x += volt.speed;
+        transform.translation.x += volt.speed * time.delta_secs();
     }
     if keys.pressed(KeyCode::KeyA) {
-        transform.translation.x -= volt.speed;
+        transform.translation.x -= volt.speed* time.delta_secs();
     }
     if keys.pressed(KeyCode::KeyW) {
-        transform.translation.y += volt.speed;
+        transform.translation.y += volt.speed* time.delta_secs();
     }
     if keys.pressed(KeyCode::KeyS) {
-        transform.translation.y -= volt.speed;
+        transform.translation.y -= volt.speed* time.delta_secs();
     }
 }
 fn follow_player_camera(
