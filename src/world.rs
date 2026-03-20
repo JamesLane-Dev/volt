@@ -1,3 +1,4 @@
+use crate::enemy::Enemy;
 use crate::volt::Volt;
 use bevy::prelude::*;
 
@@ -28,7 +29,8 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup)
             .add_systems(Update, fog_of_war)
-            .add_systems(Update, update_tile_visibility);
+            .add_systems(Update, update_tile_visibility)
+            .add_systems(Update, enemy_visibility);
     }
 }
 fn setup(mut commands: Commands) {
@@ -79,6 +81,26 @@ fn update_tile_visibility(mut tile_query: Query<(&Tile, &mut Sprite)>) {
         }
         if tile.tile_visible == TileVisibility::Revealed {
             sprite.color = Color::srgb(0.5, 0.5, 0.5);
+        }
+    }
+}
+fn enemy_visibility(
+    player_query: Query<&Transform, (With<Volt>, Without<Enemy>)>,
+    mut enemy_query: Query<(&Transform, &mut Sprite), (With<Enemy>, Without<Volt>)>,
+) {
+    let Ok(player) = player_query.single() else {
+        return;
+    };
+    for (enemy, mut sprite) in enemy_query.iter_mut() {
+        let x = (player.translation.x - enemy.translation.x);
+        let y = (player.translation.y - enemy.translation.y);
+
+        let distance = Vec2::new(x, y).length();
+
+        if distance <= VISION_RANGE {
+            sprite.color.set_alpha(1.0); //visible
+        } else {
+            sprite.color.set_alpha(0.0); // hidden
         }
     }
 }

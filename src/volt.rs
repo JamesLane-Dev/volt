@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 use crate::state::GameState;
 
@@ -6,6 +7,8 @@ use crate::state::GameState;
 pub struct Volt {
     pub speed: f32,
 }
+#[derive(Component)]
+pub struct CrossHair;
 #[derive(Component)]
 pub struct Energy {
     pub current: f32,
@@ -18,6 +21,7 @@ impl Plugin for VoltPlugin {
         app.add_systems(Startup, setup)
             .add_systems(Update, energy_drain.run_if(in_state(GameState::Playing)))
             .add_systems(Update, movement.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, move_crosshair.run_if(in_state(GameState::Playing)))
             .add_systems(
                 Update,
                 follow_player_camera.run_if(in_state(GameState::Playing)),
@@ -48,18 +52,19 @@ pub fn setup(mut commands: Commands) {
         },
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
-
-    // --- Temorary sprite for reference ---
     commands.spawn((
+        CrossHair,
         Sprite {
-            color: Color::srgb(0.5, 0.6, 0.4),
-            custom_size: Some(Vec2::new(30.0, 30.0)),
+            color: Color::srgb(0.0, 0.0, 0.0),
+            custom_size: Some(Vec2::new(10.0, 10.0)),
             ..default()
         },
-        Transform::from_xyz(35.0, -35.0, 0.0),
+        Transform::from_xyz(60.0, 60.0, 0.0),
     ));
 }
-fn movement(time: Res<Time>,    mut query: Query<(&mut Transform, &Volt), With<Volt>>,
+fn movement(
+    time: Res<Time>,
+    mut query: Query<(&mut Transform, &Volt), With<Volt>>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
     let Ok((mut transform, volt)) = query.single_mut() else {
@@ -70,13 +75,13 @@ fn movement(time: Res<Time>,    mut query: Query<(&mut Transform, &Volt), With<V
         transform.translation.x += volt.speed * time.delta_secs();
     }
     if keys.pressed(KeyCode::KeyA) {
-        transform.translation.x -= volt.speed* time.delta_secs();
+        transform.translation.x -= volt.speed * time.delta_secs();
     }
     if keys.pressed(KeyCode::KeyW) {
-        transform.translation.y += volt.speed* time.delta_secs();
+        transform.translation.y += volt.speed * time.delta_secs();
     }
     if keys.pressed(KeyCode::KeyS) {
-        transform.translation.y -= volt.speed* time.delta_secs();
+        transform.translation.y -= volt.speed * time.delta_secs();
     }
 }
 fn follow_player_camera(
@@ -92,4 +97,24 @@ fn follow_player_camera(
 
     camera.translation.x = transform.translation.x;
     camera.translation.y = transform.translation.y;
+}
+fn move_crosshair(
+    window: Single<&Window, With<PrimaryWindow>>,
+    camera: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
+    mut crosshair: Query<&mut Transform, With<CrossHair>>,
+) {
+    let Some(cursor_pos) = window.cursor_position() else {
+        return;
+    };
+    let Ok((cam, cam_transform)) = camera.single() else {
+        return;
+    };
+    let Ok(world_pos) = cam.viewport_to_world_2d(cam_transform, cursor_pos) else {
+        return;
+    };
+    let Ok(mut crosshair) = crosshair.single_mut() else {
+        return;
+    };
+    crosshair.translation.x = world_pos.x;
+    crosshair.translation.y = world_pos.y;
 }
