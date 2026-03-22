@@ -1,11 +1,18 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
+use crate::enemy::Enemy;
 use crate::state::GameState;
+
+const LASER_SPEED: f32 = 400.;
 
 #[derive(Component)]
 pub struct Volt {
     pub speed: f32,
+}
+#[derive(Component)]
+pub struct Laser {
+    pub direction: Vec2,
 }
 #[derive(Component)]
 pub struct CrossHair;
@@ -22,6 +29,10 @@ impl Plugin for VoltPlugin {
             .add_systems(Update, energy_drain.run_if(in_state(GameState::Playing)))
             .add_systems(Update, movement.run_if(in_state(GameState::Playing)))
             .add_systems(Update, move_crosshair.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, fire_laser.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, despawn_laser.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, laser_hit.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, move_laser.run_if(in_state(GameState::Playing)))
             .add_systems(
                 Update,
                 follow_player_camera.run_if(in_state(GameState::Playing)),
@@ -40,7 +51,7 @@ fn energy_drain(time: Res<Time>, mut query: Query<&mut Energy, With<Volt>>) {
 pub fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
     commands.spawn((
-        Volt { speed: 100.0 },
+        Volt { speed: 125.0 },
         Energy {
             current: 100.0,
             max: 150.0,
@@ -117,4 +128,83 @@ fn move_crosshair(
     };
     crosshair.translation.x = world_pos.x;
     crosshair.translation.y = world_pos.y;
+}
+fn fire_laser(
+    mut commands: Commands,
+    mouse: Res<ButtonInput<MouseButton>>,
+    player_query: Query<&Transform, With<Volt>>,
+    crosshair_query: Query<&Transform, With<CrossHair>>,
+) {
+    if !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let Ok(crosshair) = crosshair_query.single() else {
+        return;
+    };
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let x = crosshair.translation.x - player_transform.translation.x;
+    let y = crosshair.translation.y - player_transform.translation.y;
+    let direction = Vec2::new(x, y).normalize_or_zero();
+
+    commands.spawn((
+        Laser { direction },
+        Sprite {
+            color: Color::srgb(0.6, 1.0, 0.5),
+            custom_size: Some(Vec2::new(6.0, 6.0)),
+            ..default()
+        },
+        Transform::from_xyz(
+            player_transform.translation.x,
+            player_transform.translation.y,
+            1.0,
+        ),
+    ));
+}
+fn move_laser(time: Res<Time>, mut query: Query<(&mut Transform, &Laser), With<Laser>>) {
+    for (mut transform, laser) in query.iter_mut() {
+        transform.translation.x += laser.direction.x * LASER_SPEED * time.delta_secs();
+        transform.translation.y += laser.direction.y * LASER_SPEED * time.delta_secs();
+    }
+}
+fn despawn_laser(
+    mut commands: Commands,
+    player_query: Query<&Transform, With<Volt>>,
+    laser_query: Query<(Entity, &Transform), With<Laser>>,
+) {
+    let Ok(volt_transform) = player_query.single() else {
+        return;
+    };
+    for (entity, transform) in laser_query.iter() {
+        let x = volt_transform.translation.x - transform.translation.x;
+        let y = volt_transform.translation.y - transform.translation.y;
+
+        let distance = Vec2::new(x, y).length();
+        if distance > 500.0 {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+fn laser_hit(
+    mut commands: Commands,
+    laser_query: Query<(Entity, &Transform), With<Laser>>,
+    mut enemy_query: Query<(Entity, &mut Enemy, &Transform), With<Enemy>>,
+) {
+    for (laser_entity, laser_transform) in laser_query.iter() {
+        for (entity, mut enemy, enemy_transform) in enemy_query.iter_mut() {
+            let x = enemy_transform.translation.x - laser_transform.translation.x;
+            let y = enemy_transform.translation.y - laser_transform.translation.y;
+
+            let distance = Vec2::new(x, y).length();
+            if distance < 20.0 {
+                commands.entity(laser_entity).despawn();
+                enemy.health -= 10.0;
+                if enemy.health <= 0.0 {
+                    commands.entity(entity).despawn();
+                }
+                break;
+            }
+        }
+    }
 }
